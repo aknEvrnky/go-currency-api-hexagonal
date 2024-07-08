@@ -21,12 +21,12 @@ func NewAdapter(api ports.ApiPort, port int) *Adapter {
 	}
 }
 
-func (a *Adapter) Run() {
+func (a *Adapter) Run() error {
 	router.SetupRoutes(a.FiberApp, a.Api)
 
-	err := a.FiberApp.Listen(fmt.Sprintf(":%d", a.port))
+	return a.FiberApp.Listen(fmt.Sprintf(":%d", a.port))
+}
 
-	if err != nil {
-		panic(err)
-	}
+func (a *Adapter) Shutdown() error {
+	return a.FiberApp.Shutdown()
 }
