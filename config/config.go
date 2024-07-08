@@ -1,15 +1,20 @@
 package config
 
 import (
-	"log"
+	"errors"
 	"os"
 	"strconv"
+)
+
+var (
+	ErrEnvKeyIsNotSet       = errors.New("environment variable is not set")
+	ErrEnvValueTypeMismatch = errors.New("environment variable type mismatch")
 )
 
 func GetApplicationPort() int {
 	port, err := strconv.ParseInt(getEnvironmentValue("APP_PORT"), 10, 64)
 	if err != nil {
-		log.Fatalf("failed to parse APP_PORT: %v", err)
+		panic(ErrEnvValueTypeMismatch)
 	}
 
 	return int(port)
@@ -18,7 +23,7 @@ func GetApplicationPort() int {
 func getEnvironmentValue(key string) string {
 	var val string
 	if val = os.Getenv(key); val == "" {
-		log.Fatalf("environment variable %s is not set", key)
+		panic(ErrEnvKeyIsNotSet)
 	}
 
 	return val

@@ -23,12 +23,12 @@ func (i *InMemoryCacheAdapter) Get(key string) (cache.Value, error) {
 
 	cch, ok := i.cache[key]
 	if !ok {
-		return cache.Cache{}, nil
+		return nil, nil
 	}
 
 	if time.Now().After(cch.Expiry) {
 		delete(i.cache, key)
-		return cache.Cache{}, nil
+		return nil, nil
 	}
 
 	return cch.Value, nil
@@ -76,12 +76,13 @@ func (i *InMemoryCacheAdapter) Remember(key string, ttl time.Duration, f func() 
 
 	val, err := f()
 	if err != nil {
-		return cache.Cache{}, err
+		return nil, err
 	}
 
 	i.cache[key] = cache.Cache{
 		Expiry: time.Now().Add(ttl),
 		Value:  val,
 	}
+
 	return val, nil
 }

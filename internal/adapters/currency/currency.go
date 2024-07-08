@@ -57,10 +57,10 @@ func (a *Adapter) GetList() ([]domain.Currency, error) {
 
 		// make a http request to the endpoint
 		res, err := http.Get(a.endpoint)
-		defer res.Body.Close()
 		if err != nil {
 			return nil, ErrApiError
 		}
+		defer res.Body.Close()
 
 		// check the response status code
 		if res.StatusCode != http.StatusOK {

@@ -48,6 +48,61 @@ func TestItCanGetAllCurrencies(t *testing.T) {
 	assert.Equal(t, 1.3, currencies[0].SellingRate)
 }
 
+func TestItReturnsAnErrorIfServerIsNotReachable(t *testing.T) {
+	// Create a new in-memory cache adapter for testing
+	cacheAdapter := cache.NewInMemoryCacheAdapter()
+	adapter := NewAdapter(cacheAdapter)
+
+	// Override ENDPOINT with a non-existing server URL
+	adapter.endpoint = "http://invalid-url"
+
+	_, err := adapter.GetList()
+
+	assert.ErrorIs(t, err, ErrApiError)
+}
+
+func TestItCantReadResponseBody(t *testing.T) {
+	// mock the http server
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Length", "50")
+		// return less bytes, which will result in an "unexpected EOF" from ioutil.ReadAll()
+		_, _ = w.Write([]byte("a"))
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	// Create a new in-memory cache adapter for testing
+	cacheAdapter := cache.NewInMemoryCacheAdapter()
+	adapter := NewAdapter(cacheAdapter)
+
+	// Override ENDPOINT with the mock server URL
+	adapter.endpoint = server.URL
+
+	_, err := adapter.GetList()
+
+	assert.ErrorIs(t, err, ErrApiError)
+}
+
+func TestResponseBodyIsNotInXMLFormat(t *testing.T) {
+	// mock the http server
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("invalid xml"))
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	// Create a new in-memory cache adapter for testing
+	cacheAdapter := cache.NewInMemoryCacheAdapter()
+	adapter := NewAdapter(cacheAdapter)
+
+	// Override ENDPOINT with the mock server URL
+	adapter.endpoint = server.URL
+
+	_, err := adapter.GetList()
+
+	assert.ErrorIs(t, err, ErrApiError)
+}
+
 func TestItCanGetAllCurrenciesFromCache(t *testing.T) {
 	// Create a new in-memory cache adapter for testing
 	cacheAdapter := cache.NewInMemoryCacheAdapter()
@@ -185,4 +240,47 @@ func TestAdapter_GetByCurrencyCodeFromCache(t *testing.T) {
 	assert.Equal(t, uint(1), currency.Unit)
 	assert.Equal(t, 1.1, currency.BuyingRate)
 	assert.Equal(t, 1.3, currency.SellingRate)
+}
+
+func TestItReturnsNilWhenErrorOccurred(t *testing.T) {
+	// mock the http server
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Length", "50")
+		// return less bytes, which will result in an "unexpected EOF" from ioutil.ReadAll()
+		_, _ = w.Write([]byte("a"))
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	// Create a new in-memory cache adapter for testing
+	cacheAdapter := cache.NewInMemoryCacheAdapter()
+	adapter := NewAdapter(cacheAdapter)
+
+	// Override ENDPOINT with the mock server URL
+	adapter.endpoint = server.URL
+
+	_, err := adapter.GetByCurrencyCode("USD")
+
+	assert.ErrorIs(t, err, ErrApiError)
+}
+
+func TestItReturnsCurrencyNotFound(t *testing.T) {
+	// Mock HTTP server
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(xmlResponse))
+	}
+	server := httptest.NewServer(http.HandlerFunc(handler))
+	defer server.Close()
+
+	// Create a new in-memory cache adapter for testing
+	cacheAdapter := cache.NewInMemoryCacheAdapter()
+	adapter := NewAdapter(cacheAdapter)
+
+	// Override ENDPOINT with the mock server URL
+	adapter.endpoint = server.URL
+
+	currency, err := adapter.GetByCurrencyCode("PLN")
+
+	assert.ErrorIs(t, err, ErrCurrencyNotFound)
+	assert.Equal(t, domain.Currency{}, currency)
 }
