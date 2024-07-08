@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ENDPOINT = "https://www.tcmb.gov.tr/kurlar/today.xml"
+	DEFAULT_ENDPOINT = "https://www.tcmb.gov.tr/kurlar/today.xml"
 )
 
 // define errors objects
@@ -23,12 +23,14 @@ var (
 )
 
 type Adapter struct {
-	cache ports.CachePort
+	cache    ports.CachePort
+	endpoint string
 }
 
 func NewAdapter(cache ports.CachePort) *Adapter {
 	return &Adapter{
-		cache: cache,
+		cache:    cache,
+		endpoint: DEFAULT_ENDPOINT,
 	}
 }
 
@@ -54,7 +56,7 @@ func (a *Adapter) GetList() ([]domain.Currency, error) {
 		var currencyEntries []domain.Currency
 
 		// make a http request to the endpoint
-		res, err := http.Get(ENDPOINT)
+		res, err := http.Get(a.endpoint)
 		defer res.Body.Close()
 		if err != nil {
 			return nil, ErrApiError
