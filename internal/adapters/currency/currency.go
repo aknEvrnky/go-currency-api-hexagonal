@@ -4,8 +4,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"github.com/aknEvrnky/currency-api-hexogonal/internal/application/core/domain"
+	"github.com/aknEvrnky/currency-api-hexogonal/internal/cache"
+	"github.com/aknEvrnky/currency-api-hexogonal/internal/ports"
 	"io"
+	"log"
 	"net/http"
+	"time"
 )
 
 const (
@@ -19,10 +23,13 @@ var (
 )
 
 type Adapter struct {
+	cache ports.CachePort
 }
 
-func NewAdapter() *Adapter {
-	return &Adapter{}
+func NewAdapter(cache ports.CachePort) *Adapter {
+	return &Adapter{
+		cache: cache,
+	}
 }
 
 type currency struct {
@@ -41,45 +48,56 @@ type currencies struct {
 }
 
 func (a *Adapter) GetList() ([]domain.Currency, error) {
-	// make a http request to the endpoint
-	res, err := http.Get(ENDPOINT)
-	defer res.Body.Close()
+	currencyEntries, err := a.cache.Remember("currencies", 10*time.Second, func() (cache.Value, error) {
+		log.Println("fetching from api")
+
+		var currencyEntries []domain.Currency
+
+		// make a http request to the endpoint
+		res, err := http.Get(ENDPOINT)
+		defer res.Body.Close()
+		if err != nil {
+			return nil, ErrApiError
+		}
+
+		// check the response status code
+		if res.StatusCode != http.StatusOK {
+			return nil, ErrApiError
+		}
+
+		// parse the response body
+		data, err := io.ReadAll(res.Body)
+		if err != nil {
+			return nil, ErrApiError
+		}
+
+		// unmarshal the response body
+		var c currencies
+		err = xml.Unmarshal(data, &c)
+
+		if err != nil {
+			return nil, ErrApiError
+		}
+
+		// map the response to domain.Currency
+		for _, cur := range c.Currencies {
+			currencyEntries = append(currencyEntries, domain.Currency{
+				Code:        cur.CurrencyCode,
+				Title:       cur.CurrencyName,
+				Unit:        cur.Unit,
+				BuyingRate:  cur.BanknoteBuying,
+				SellingRate: cur.BanknoteSelling,
+			})
+		}
+
+		return currencyEntries, nil
+	})
+
 	if err != nil {
-		return nil, ErrApiError
+		return nil, err
 	}
 
-	// check the response status code
-	if res.StatusCode != http.StatusOK {
-		return nil, ErrApiError
-	}
-
-	// parse the response body
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		return nil, ErrApiError
-	}
-
-	// unmarshal the response body
-	var c currencies
-	err = xml.Unmarshal(data, &c)
-
-	if err != nil {
-		return nil, ErrApiError
-	}
-
-	// map the response to domain.Currency
-	var currencies []domain.Currency
-	for _, cur := range c.Currencies {
-		currencies = append(currencies, domain.Currency{
-			Code:        cur.CurrencyCode,
-			Title:       cur.CurrencyName,
-			Unit:        cur.Unit,
-			BuyingRate:  cur.BanknoteBuying,
-			SellingRate: cur.BanknoteSelling,
-		})
-	}
-
-	return currencies, nil
+	return currencyEntries.([]domain.Currency), nil
 }
 
 func (a *Adapter) GetByCurrencyCode(currencyCode string) (domain.Currency, error) {
